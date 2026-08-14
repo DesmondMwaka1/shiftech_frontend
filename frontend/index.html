@@ -177,11 +177,7 @@
 
     <script>
       (function () {
-        const API_local =
-          window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1"
-            ? "http://localhost:8000"
-            : "http://0.0.0.0:8000";
+        const API_local = "https://d07e-197-248-215-13.ngrok-free.app";
 
         let sessionId = "";
         let sessionPromise = null;

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Document</title>
+</head>
+<body>
+<div id="shiftech-chatbot-widget">
+    <div id="chat-container">
+        <!-- Top section only shows when expanded -->
+        <div id="chat-top-section">
+            <div style="display: flex; align-items: center;">
+                <img src="logo.png" alt="Logo">
+                <h3>Shiftech Assistant</h3>
+            </div>
+            <button id="minimizeBtn" title="Minimize">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-arrows-minimize" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"> 
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/> 
+                    <polyline points="5 9 9 9 9 5" /> 
+                    <line x1="3" y1="3" x2="9" y2="9" /> 
+                    <polyline points="5 15 9 15 9 19" /> 
+                    <line x1="3" y1="21" x2="9" y2="15" /> 
+                    <polyline points="19 9 15 9 15 5" /> 
+                    <line x1="15" y1="9" x2="21" y2="3" /> 
+                    <polyline points="19 15 15 15 15 19" /> 
+                    <line x1="15" y1="15" x2="21" y2="21" /> 
+                </svg>
+            </button>
+        </div>
+
+        <!-- Chat history window -->
+        <div id="chat-window"></div>
+        
+        <!-- Input area acts as the pill body when minimized -->
+        <div id="input-area">
+            <input type="text" id="queryInput" placeholder="Ask Shiftech Assistant...">
+            <button id="sendBtn" title="Send">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Isolated Scope to prevent global variable pollution
+    const API_local = "https://d07e-197-248-215-13.ngrok-free.app";
+    let sessionId = "";
+    let sessionPromise = null;
+    let hasConversation = false; 
+    
+    const root = document.getElementById('shiftech-chatbot-widget');
+    const container = root.querySelector('#chat-container');
+    const queryInput = root.querySelector('#queryInput');
+    const sendBtn = root.querySelector('#sendBtn');
+    const minimizeBtn = root.querySelector('#minimizeBtn');
+    const chatWindow = root.querySelector('#chat-window');
+
+    // Expand container when clicking anywhere on the pill if a conversation is active
+    container.addEventListener('click', function(e) {
+        if (hasConversation && !container.classList.contains('expanded')) {
+            container.classList.add('expanded');
+        }
+    });
+
+    // Also expand as soon as the user focuses on the pill
+    queryInput.addEventListener('focus', function() {
+        if (!container.classList.contains('expanded')) {
+            container.classList.add('expanded');
+        }
+    });
+
+    async function initSession() {
+        if (sessionId) return sessionId;
+        if (!sessionPromise) {
+            sessionPromise = (async () => {
+                const res = await fetch(`${API_local}/start-session`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Could not start a chat session.');
+                }
+                sessionId = data.session_id;
+                return sessionId;
+            })();
+        }
+        return sessionPromise;
+    }
+
+    async function sendMessage(event) {
+        if (event) event.stopPropagation(); 
+        
+        if (!queryInput.value.trim()) return;
+
+        hasConversation = true; 
+        if (!container.classList.contains('expanded')) {
+            container.classList.add('expanded');
+        }
+
+        chatWindow.innerHTML += `<div class="shiftech-message shiftech-user">${queryInput.value}</div>`;
+        const query = queryInput.value;
+        queryInput.value = '';
+        sendBtn.disabled = true;
+
+        const aiMessageId = 'ai-msg-' + Date.now();
+        chatWindow.innerHTML += `
+            <div class="shiftech-message shiftech-ai" id="${aiMessageId}">
+                <div class="shiftech-loader">
+                    <div class="shiftech-dot"></div>
+                    <div class="shiftech-dot"></div>
+                    <div class="shiftech-dot"></div>
+                </div>
+            </div>`;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        try {
+            await initSession();
+
+            const res = await fetch(`${API_local}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query, session_id: sessionId })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || 'The assistant could not respond right now.');
+            }
+
+            const aiBubble = root.querySelector(`#${aiMessageId}`);
+            aiBubble.innerHTML = (data.response || '').replace(/\n/g, '<br>');
+        } catch (error) {
+            const aiBubble = root.querySelector(`#${aiMessageId}`);
+            aiBubble.innerHTML = error.message || 'The assistant could not respond right now.';
+            console.error(error);
+        } finally {
+            sendBtn.disabled = false;
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+    }
+
+    function minimizeChat(event) {
+        if (event) event.stopPropagation(); 
+        container.classList.remove('expanded');
+    }
+
+    // Event Listeners bind safely
+    sendBtn.addEventListener('click', sendMessage);
+    minimizeBtn.addEventListener('click', minimizeChat);
+
+    initSession();
+
+    queryInput.addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            sendMessage(event);
+        }
+    });
+})();
+</script>
+</body>
+</html>
